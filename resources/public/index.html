@@ -1,0 +1,181 @@
+<html>
+<head>
+    <style>
+        body {font-family: sans-serif;font-weight: bold;overflow: hidden;}
+        html, body {padding: 0;margin: 0;}
+        .job_wrapper {text-align: center;color: #FFFFFF;}
+        .building {background-color: #d6d600;}
+        .failed {background-color: red;}
+        .passed {background-color: green;}
+        .job {border-radius: 20px;-moz-border-radius: 20px;}
+        #TextDimensionDiv {position: absolute;visibility: hidden;height: auto;width: auto;}
+    </style>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+    <script>
+        var allJobs = {};
+        var jobsToDisplay = [];
+
+        var jobPadding = 5;
+        var jobMargin = 8;
+        var jobBorderWidth = 0;
+        var clientWidth;
+        var clientHeight;
+        var rows = 0;
+        var columns = 0;
+
+        function updateWindowSizes() {
+            clientWidth = $(window).width();
+            clientHeight = $(window).height();
+        }
+
+        function getLongestJob(jobs) {
+            return jobs.sort(function(a, b){return b.length - a.length;})[0];
+        }
+
+        function removeAllJobs() {
+            $(".job").remove();
+        }
+
+        var cachedTextDimensions = new Array();
+
+        function getTextDimensions(text, fontSize) {
+            $("#TextDimensionDiv").html(text);
+            $("#TextDimensionDiv").css("font-size", fontSize + "px");
+
+            var dimension = {};
+            dimension.width = $("#TextDimensionDiv")[0].clientWidth;
+            dimension.height = $("#TextDimensionDiv")[0].clientHeight;
+            return dimension;
+        }
+
+        function getJobDimensions(job, fontSize) {
+            var textDimensions = getTextDimensions(job, fontSize);
+            var dimension = {};
+            dimension.width = textDimensions.width + 2 * jobPadding + 2 * jobBorderWidth;
+            dimension.height = textDimensions.height + 2 * jobPadding + 2 * jobBorderWidth;
+            return dimension;
+        }
+
+        function repaint() {
+            removeAllJobs();
+            var longestJob = getLongestJob(jobsToDisplay);
+            var maxFontSize = 0;
+
+            for (var columnCount = 1; columnCount <= jobsToDisplay.length; columnCount++) {
+                for (var fontSize = 10; fontSize <= 302; fontSize++) {
+                    var rowCount = Math.ceil(jobsToDisplay.length / columnCount);
+                    var jobDimensions = getJobDimensions(longestJob, fontSize);
+                    var totalWidth = jobDimensions.width * columnCount + jobMargin * (columnCount - 1);
+                    var totalHeight = jobDimensions.height * rowCount + jobMargin * (rowCount - 1);
+
+                    if (totalWidth <= clientWidth && totalHeight <= clientHeight) {
+                        if (fontSize > maxFontSize) {
+                            maxFontSize = fontSize;
+                            rows = rowCount;
+                            columns = columnCount;
+                        }
+                    } else {break;}
+                }
+            }
+
+            var jobIndex = 0;
+            var left = jobMargin;
+            var jobWidth = Math.round((clientWidth - (columns + 1) * jobMargin) / columns);
+            var top = jobMargin;
+            var jobHeight = Math.round((clientHeight - (rows + 1) * jobMargin) / rows);
+            var textDimensions = getTextDimensions("YgGy", maxFontSize);
+
+            for (var column = 0; column < columns; column++) {
+                if (column == 0) {
+                    left = jobMargin;
+                } else {
+                    left += jobWidth + jobMargin;
+                }
+                for (var row = 0; row < rows; row++) {
+                    if (row == 0) {
+                        top = jobMargin;
+                    } else {
+                        top += jobHeight + jobMargin;
+                    }
+
+                    if (jobIndex < jobsToDisplay.length) {
+                        var job = jobsToDisplay[jobIndex];
+                        var claimedBorderWidth = 0;
+
+                        //- job dimensions and position
+                        var jobDimensionsStyle = {
+                            "width": jobWidth - 2 * claimedBorderWidth,
+                            "height": jobHeight - 2 * claimedBorderWidth
+                        };
+                        var jobPositionStyle = {
+                            "position": "absolute",
+                            "top": top,
+                            "left": left
+                        };
+
+                        //- create the job content div ---------------------
+                        var jobContent = $('<div />');
+                        jobContent.css({
+                            "position": "absolute",
+                            "top": Math.round((jobHeight - textDimensions.height) / 2) + 'px'
+                        });
+                        jobContent.addClass("job_content");
+                        jobContent.css(jobDimensionsStyle);
+                        jobContent.addClass(allJobs[job]);
+                        jobContent.text(job);
+
+                        //- create the job wrapper div ---------------------
+                        var jobWrapper = $('<div />').attr({
+                            "id": job.name
+                        });
+                        jobWrapper.css({
+                            "font-size": (maxFontSize - 1) + "px"
+                        });
+                        jobWrapper.css(jobPositionStyle);
+                        jobWrapper.css(jobDimensionsStyle);
+                        jobWrapper.addClass("job");
+                        jobWrapper.addClass("job_wrapper");
+
+                        //- assemble job divs ------------------------------
+                        jobWrapper.append(jobContent);
+                        $("body").prepend(jobWrapper);
+                        jobIndex++;
+                    }
+                }
+            }
+        }
+
+        function updateJobs(data) {
+          allJobs = data;
+          jobsToDisplay = Object.keys(data);
+        }
+
+		$(document).ready(function () {
+		    updateWindowSizes();
+            var ws = new WebSocket("ws://localhost:6734/");
+            ws.onmessage = function(evt) {
+			    updateJobs(JSON.parse(evt.data));
+			    repaint();
+		    };
+
+            ws.onopen = function(event) {
+              console.log("Connected");
+            };
+
+            ws.onclose = function(event) {
+              $("body").innerHTML("Connection Lost");
+            };
+		});
+
+		window.onresize = function (event) {
+		    updateWindowSizes();
+		    repaint();
+		}
+    </script>
+</head>
+
+<body>
+<div id="TextDimensionDiv"></div>
+</body>
+
+</html>
