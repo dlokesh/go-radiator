@@ -11,9 +11,12 @@
         #TextDimensionDiv {position: absolute;visibility: hidden;height: auto;width: auto;}
     </style>
     <script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+    <script src="js/main.js"></script>
     <script>
         var allJobs = {};
         var jobsToDisplay = [];
+        var includedJobs = [];
+        var excludedJobs = [];
 
         var jobPadding = 5;
         var jobMargin = 8;
@@ -145,12 +148,41 @@
             }
         }
 
+        function get(name){
+           if(name=(new RegExp('[?&]'+encodeURIComponent(name)+'=([^&]*)')).exec(location.search))
+              return decodeURIComponent(name[1]);
+        }        
+
+        function jobsToLowerCase(jobs) {
+            return jobs.map(function(j){
+                return j.toLowerCase();
+            })
+        }
+
+        function getJob(type) {
+            var _jobs = get(type);
+            _jobs = _jobs ? jobsToLowerCase(_jobs.split(",")) : [];
+            return _jobs;
+        }
+
+        function applyJobFilters() {
+            excludedJobs = getJob("exclude_jobs");
+            includedJobs = getJob("include_jobs");
+        }
+
         function updateJobs(data) {
           allJobs = data;
-          jobsToDisplay = Object.keys(data);
+          if(excludedJobs.length > 0) {
+            jobsToDisplay = Object.keys(data).filter(function(i){return $.inArray(i.trim().toLowerCase(),excludedJobs) == -1;});
+          } else if(includedJobs.length > 0) {
+            jobsToDisplay = Object.keys(data).filter(function(i){return $.inArray(i.trim().toLowerCase(),includedJobs) >= 0;});
+          } else {
+            jobsToDisplay = Object.keys(data);
+          }
         }
 
 		$(document).ready(function () {
+            applyJobFilters();            
 		    updateWindowSizes();
             var ws = new WebSocket("ws://localhost:6734/");
             ws.onmessage = function(evt) {
